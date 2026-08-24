@@ -1,66 +1,66 @@
-const mongoose = require("mongoose");
+const mongoose = require('mongoose');
 
 const conversationSchema = new mongoose.Schema(
-  {
-    // Users participating in the conversation
-    participants: [
-      {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: "User",
-        required: true,
-      },
-    ],
-    
-    hiddenFor: [
-      {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: "User",
-      },
-    ],
+    {
+        // Users participating in the conversation
+        participants: [
+            {
+                type: mongoose.Schema.Types.ObjectId,
+                ref: 'User',
+                required: true,
+            },
+        ],
 
-    isGroup: {
-      type: Boolean,
-      default: false,
-    },
+        hiddenFor: [
+            {
+                type: mongoose.Schema.Types.ObjectId,
+                ref: 'User',
+            },
+        ],
 
-    groupName: {
-      type: String,
-      default: "",
-    },
+        isGroup: {
+            type: Boolean,
+            default: false,
+        },
 
-    groupImage: {
-      type: String,
-      default: "",
-    },
+        groupName: {
+            type: String,
+            default: '',
+        },
 
-    createdBy: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "User",
-      default: null,
-    },
+        groupImage: {
+            type: String,
+            default: '',
+        },
 
-    // Latest message (used for chat list preview)
-    lastMessage: {
-      type: String,
-      default: "",
-    },
+        createdBy: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: 'User',
+            default: null,
+        },
 
-    // User who sent the latest message
-    lastMessageSender: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "User",
-      default: null,
-    },
+        // Latest message (used for chat list preview)
+        lastMessage: {
+            type: String,
+            default: '',
+        },
 
-    // Time of the latest message
-    lastMessageTime: {
-      type: Date,
-      default: null,
+        // User who sent the latest message
+        lastMessageSender: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: 'User',
+            default: null,
+        },
+
+        // Time of the latest message
+        lastMessageTime: {
+            type: Date,
+            default: null,
+        },
     },
-  },
-  {
-    timestamps: true,
-  }
+    {
+        timestamps: true,
+    }
 );
 
-module.exports = mongoose.model("Conversation", conversationSchema);
+module.exports = mongoose.model('Conversation', conversationSchema);
