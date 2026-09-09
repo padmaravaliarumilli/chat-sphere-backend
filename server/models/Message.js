@@ -30,6 +30,7 @@ const messageSchema = new mongoose.Schema(
             type: String,
             default: '',
         },
+
         audio: {
             type: String,
             default: '',
@@ -50,10 +51,38 @@ const messageSchema = new mongoose.Schema(
             type: Boolean,
             default: false,
         },
+
+        expiresAt: {
+            type: Date,
+            default: null,
+        },
+
+        isSelfDestruct: {
+            type: Boolean,
+            default: false,
+        },
+
+        // Scheduled message fields
+        scheduledAt: {
+            type: Date,
+            default: null,
+        },
+
+        isScheduled: {
+            type: Boolean,
+            default: false,
+        },
+
+        scheduledStatus: {
+            type: String,
+            enum: ['pending', 'sent', 'cancelled'],
+            default: 'pending',
+        },
     },
     {
         timestamps: true,
     }
 );
+messageSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 });
 
 module.exports = mongoose.model('Message', messageSchema);

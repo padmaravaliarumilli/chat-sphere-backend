@@ -11,6 +11,11 @@ const authRoutes = require('./routes/authRoutes');
 const messageRoutes = require('./routes/messageRoutes');
 const conversationRoutes = require('./routes/conversationRoutes');
 const mediaRoutes = require('./routes/mediaRoutes');
+const aiRoutes = require('./routes/aiRoutes');
+const translationRoutes = require('./routes/translationRoutes');
+const pollRoutes = require('./routes/pollRoutes');
+const bookmarkRoutes = require('./routes/bookmarkRoutes');
+const { startScheduledMessageService } = require('./services/scheduledMessageService');
 
 const { initializeSocket } = require('./socket/socket'); // NEW
 
@@ -20,13 +25,17 @@ connectDB();
 
 app.use(cors());
 
-app.use(express.json());
+app.use(express.json({ limit: '1mb' }));
 
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/messages', messageRoutes);
 app.use('/api/conversations', conversationRoutes);
 app.use('/api/media', mediaRoutes);
+app.use('/api/ai', aiRoutes);
+app.use('/api/translate', translationRoutes);
+app.use('/api/polls', pollRoutes);
+app.use('/api/bookmarks', bookmarkRoutes);
 
 app.get('/', (req, res) => {
     res.send('Chat Sphere Backend Running...');
@@ -43,4 +52,6 @@ const PORT = process.env.PORT || 3000;
 // Start HTTP Server instead of app.listen()
 server.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
+
+    startScheduledMessageService();
 });
