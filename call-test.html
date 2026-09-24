@@ -1,0 +1,1486 @@
+<!DOCTYPE html>
+
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+```
+<title>Chat Sphere - Call Test</title>
+
+<!-- Socket.IO Client -->
+<script src="http://localhost:3001/socket.io/socket.io.js"></script>
+
+<style>
+    body {
+        font-family: Arial, sans-serif;
+        margin: 20px;
+        background: #f5f5f5;
+    }
+
+    h1 {
+        margin-bottom: 20px;
+    }
+
+    .container {
+        max-width: 900px;
+        margin: auto;
+        background: white;
+        padding: 20px;
+        border-radius: 10px;
+    }
+
+    label {
+        display: block;
+        margin-top: 10px;
+        font-weight: bold;
+    }
+
+    input {
+        width: 100%;
+        padding: 10px;
+        margin: 6px 0 12px;
+        box-sizing: border-box;
+        border: 1px solid #ccc;
+        border-radius: 5px;
+    }
+
+    button {
+        padding: 10px 15px;
+        margin: 5px;
+        border: none;
+        border-radius: 5px;
+        cursor: pointer;
+        font-size: 14px;
+    }
+
+    button:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+    }
+
+    #connectBtn {
+        background: #2196f3;
+        color: white;
+    }
+
+    #audioCallBtn {
+        background: #4caf50;
+        color: white;
+    }
+
+    #videoCallBtn {
+        background: #9c27b0;
+        color: white;
+    }
+
+    #acceptBtn {
+        background: #4caf50;
+        color: white;
+    }
+
+    #rejectBtn {
+        background: #f44336;
+        color: white;
+    }
+
+    #endBtn {
+        background: #f44336;
+        color: white;
+    }
+
+    video {
+        width: 45%;
+        max-width: 400px;
+        min-height: 200px;
+        background: black;
+        margin: 10px;
+        border-radius: 8px;
+    }
+
+    .videos {
+        display: flex;
+        flex-wrap: wrap;
+        margin-top: 20px;
+    }
+
+    #status {
+        padding: 10px;
+        margin: 15px 0;
+        background: #eee;
+        border-radius: 5px;
+    }
+
+    #incomingCall {
+        display: none;
+        padding: 15px;
+        background: #fff3cd;
+        border-radius: 8px;
+        margin-top: 15px;
+    }
+
+    #logs {
+        margin-top: 20px;
+        background: #111;
+        color: #00ff00;
+        padding: 15px;
+        height: 220px;
+        overflow-y: auto;
+        font-family: monospace;
+        font-size: 13px;
+        border-radius: 5px;
+    }
+</style>
+```
+
+</head>
+
+<body>
+
+<div class="container">
+
+```
+<h1>Chat Sphere Audio / Video Call Test</h1>
+
+<!-- ================================================= -->
+<!-- USER INFORMATION -->
+<!-- ================================================= -->
+
+<label for="token">Your JWT Token</label>
+
+<input
+    type="text"
+    id="token"
+    placeholder="Paste your Chat Sphere JWT token"
+>
+
+<label for="otherUserId">Other User ID</label>
+
+<input
+    type="text"
+    id="otherUserId"
+    placeholder="Enter receiver/caller User ID"
+>
+
+<!-- ================================================= -->
+<!-- CONNECT -->
+<!-- ================================================= -->
+
+<button id="connectBtn">
+    Connect
+</button>
+
+<div id="status">
+    Not connected
+</div>
+
+<hr>
+
+<!-- ================================================= -->
+<!-- CALL BUTTONS -->
+<!-- ================================================= -->
+
+<button id="audioCallBtn" disabled>
+    🎤 Audio Call
+</button>
+
+<button id="videoCallBtn" disabled>
+    📹 Video Call
+</button>
+
+<button id="endBtn" disabled>
+    ❌ End Call
+</button>
+
+<!-- ================================================= -->
+<!-- INCOMING CALL -->
+<!-- ================================================= -->
+
+<div id="incomingCall">
+
+    <h3>📞 Incoming Call</h3>
+
+    <p id="incomingText"></p>
+
+    <button id="acceptBtn">
+        Accept
+    </button>
+
+    <button id="rejectBtn">
+        Reject
+    </button>
+
+</div>
+
+<!-- ================================================= -->
+<!-- VIDEO -->
+<!-- ================================================= -->
+
+<div class="videos">
+
+    <video
+        id="localVideo"
+        autoplay
+        muted
+        playsinline
+    ></video>
+
+    <video
+        id="remoteVideo"
+        autoplay
+        playsinline
+    ></video>
+
+</div>
+
+<!-- ================================================= -->
+<!-- LOGS -->
+<!-- ================================================= -->
+
+<div id="logs"></div>
+```
+
+</div>
+
+<script>
+    const SOCKET_URL = "http://localhost:3001";
+
+    let socket = null;
+
+    let peerConnection = null;
+    let localStream = null;
+
+    let currentCallId = null;
+    let currentCallType = null;
+
+    let currentCallerId = null;
+    let currentReceiverId = null;
+
+    let pendingOffer = null;
+
+    // ICE candidates can sometimes arrive before
+    // the remote description is set.
+    const pendingIceCandidates = [];
+
+    // =====================================================
+    // DOM ELEMENTS
+    // =====================================================
+
+    const tokenInput = document.getElementById("token");
+    const otherUserIdInput =
+        document.getElementById("otherUserId");
+
+    const connectBtn =
+        document.getElementById("connectBtn");
+
+    const audioCallBtn =
+        document.getElementById("audioCallBtn");
+
+    const videoCallBtn =
+        document.getElementById("videoCallBtn");
+
+    const endBtn =
+        document.getElementById("endBtn");
+
+    const acceptBtn =
+        document.getElementById("acceptBtn");
+
+    const rejectBtn =
+        document.getElementById("rejectBtn");
+
+    const incomingCall =
+        document.getElementById("incomingCall");
+
+    const localVideo =
+        document.getElementById("localVideo");
+
+    const remoteVideo =
+        document.getElementById("remoteVideo");
+
+    const logs =
+        document.getElementById("logs");
+
+    // =====================================================
+    // LOGGING
+    // =====================================================
+
+    function log(message) {
+        const time = new Date().toLocaleTimeString();
+
+        logs.innerHTML +=
+            `[${time}] ${message}<br>`;
+
+        logs.scrollTop = logs.scrollHeight;
+
+        console.log(message);
+    }
+
+    // =====================================================
+    // INITIAL STATE
+    // =====================================================
+
+    log("Chat Sphere Call Test page loaded.");
+    log("Waiting for connection...");
+
+    audioCallBtn.disabled = true;
+    videoCallBtn.disabled = true;
+    endBtn.disabled = true;
+
+    acceptBtn.disabled = false;
+    rejectBtn.disabled = false;
+
+    // =====================================================
+    // WEBRTC CONFIGURATION
+    // =====================================================
+
+    const rtcConfiguration = {
+        iceServers: [
+            {
+                urls: "stun:stun.l.google.com:19302"
+            }
+        ]
+    };
+
+    // =====================================================
+    // CREATE PEER CONNECTION
+    // =====================================================
+
+    function createPeerConnection(
+        receiverId,
+        callId,
+        callType
+    ) {
+        log("Creating WebRTC peer connection...");
+
+        peerConnection =
+            new RTCPeerConnection(
+                rtcConfiguration
+            );
+
+        currentReceiverId = receiverId;
+        currentCallId = callId;
+        currentCallType = callType;
+
+        // =================================================
+        // REMOTE TRACK
+        // =================================================
+
+        peerConnection.ontrack = (event) => {
+            log("📡 Remote media track received.");
+
+            if (event.streams && event.streams[0]) {
+                remoteVideo.srcObject =
+                    event.streams[0];
+
+                remoteVideo.play().catch(() => {});
+
+                log("✅ Remote media attached.");
+            }
+        };
+
+        // =================================================
+        // ICE CANDIDATE
+        // =================================================
+
+        peerConnection.onicecandidate = (event) => {
+            if (!event.candidate) {
+                return;
+            }
+
+            if (!currentReceiverId || !currentCallId) {
+                return;
+            }
+
+            log("🧊 Sending ICE candidate.");
+
+            socket.emit("iceCandidate", {
+                receiverId: currentReceiverId,
+                callId: currentCallId,
+                candidate: event.candidate
+            });
+        };
+
+        // =================================================
+        // CONNECTION STATE
+        // =================================================
+
+        peerConnection.onconnectionstatechange = () => {
+            log(
+                "WebRTC connection state: " +
+                peerConnection.connectionState
+            );
+
+            if (
+                peerConnection.connectionState ===
+                "connected"
+            ) {
+                log("✅ WebRTC call connected.");
+            }
+
+            if (
+                peerConnection.connectionState ===
+                "failed"
+            ) {
+                log("❌ WebRTC connection failed.");
+            }
+
+            if (
+                peerConnection.connectionState ===
+                "disconnected"
+            ) {
+                log("⚠️ WebRTC connection disconnected.");
+            }
+        };
+
+        // =================================================
+        // ICE CONNECTION STATE
+        // =================================================
+
+        peerConnection.oniceconnectionstatechange =
+            () => {
+                log(
+                    "ICE connection state: " +
+                    peerConnection.iceConnectionState
+                );
+            };
+
+        return peerConnection;
+    }
+
+    // =====================================================
+    // GET LOCAL MEDIA
+    // =====================================================
+
+    async function getLocalMedia(callType) {
+        try {
+            log(
+                callType === "video"
+                    ? "Requesting camera and microphone..."
+                    : "Requesting microphone..."
+            );
+
+            const constraints =
+                callType === "video"
+                    ? {
+                          audio: true,
+                          video: true
+                      }
+                    : {
+                          audio: true,
+                          video: false
+                      };
+
+            localStream =
+                await navigator.mediaDevices
+                    .getUserMedia(
+                        constraints
+                    );
+
+            localVideo.srcObject =
+                localStream;
+
+            localVideo.muted = true;
+
+            localVideo.play().catch(() => {});
+
+            log("✅ Local media access granted.");
+
+            return localStream;
+        } catch (error) {
+            console.error(
+                "getUserMedia error:",
+                error
+            );
+
+            log(
+                "❌ Could not access microphone/camera: " +
+                error.message
+            );
+
+            return null;
+        }
+    }
+
+    // =====================================================
+    // ADD LOCAL TRACKS
+    // =====================================================
+
+    function addLocalTracks() {
+        if (
+            !peerConnection ||
+            !localStream
+        ) {
+            return;
+        }
+
+        localStream
+            .getTracks()
+            .forEach((track) => {
+                peerConnection.addTrack(
+                    track,
+                    localStream
+                );
+            });
+
+        log("✅ Local media tracks added.");
+    }
+
+    // =====================================================
+    // CONNECT SOCKET
+    // =====================================================
+
+    connectBtn.addEventListener(
+        "click",
+        () => {
+            log("===============================");
+            log("Connect button clicked.");
+
+            const token =
+                tokenInput.value.trim();
+
+            const otherUserId =
+                otherUserIdInput.value.trim();
+
+            if (!token) {
+                log("❌ Please enter JWT token.");
+                return;
+            }
+
+            if (!otherUserId) {
+                log("❌ Please enter other user ID.");
+                return;
+            }
+
+            if (socket && socket.connected) {
+                log("⚠️ Socket is already connected.");
+                return;
+            }
+
+            log(
+                "Connecting to Chat Sphere server..."
+            );
+
+            log(
+                "Socket URL: " +
+                SOCKET_URL
+            );
+
+            socket = io(
+                SOCKET_URL,
+                {
+                    auth: {
+                        token: token
+                    }
+                }
+            );
+
+            // =================================================
+            // SOCKET CONNECTED
+            // =================================================
+
+            socket.on(
+                "connect",
+                () => {
+                    log(
+                        "✅ Socket connected successfully."
+                    );
+
+                    log(
+                        "Socket ID: " +
+                        socket.id
+                    );
+
+                    audioCallBtn.disabled = false;
+                    videoCallBtn.disabled = false;
+
+                    log(
+                        "Audio and Video buttons enabled."
+                    );
+
+                    // Join existing backend online-user system
+                    socket.emit("join");
+
+                    log(
+                        "Joined Chat Sphere socket."
+                    );
+                }
+            );
+
+            // =================================================
+            // SOCKET CONNECT ERROR
+            // =================================================
+
+            socket.on(
+                "connect_error",
+                (error) => {
+                    log(
+                        "❌ Socket connection error: " +
+                        error.message
+                    );
+                }
+            );
+
+            // =================================================
+            // SOCKET DISCONNECT
+            // =================================================
+
+            socket.on(
+                "disconnect",
+                (reason) => {
+                    log(
+                        "⚠️ Socket disconnected: " +
+                        reason
+                    );
+
+                    audioCallBtn.disabled = true;
+                    videoCallBtn.disabled = true;
+                }
+            );
+
+            // =================================================
+            // CALL UNAVAILABLE
+            // =================================================
+
+            socket.on(
+                "callUnavailable",
+                (data) => {
+                    log(
+                        "❌ Call unavailable: " +
+                        data.message
+                    );
+
+                    cleanupCall();
+                }
+            );
+
+            // =================================================
+            // INCOMING CALL
+            // =================================================
+
+            socket.on(
+                "incomingCall",
+                (data) => {
+                    log("===============================");
+                    log("📞 INCOMING CALL RECEIVED.");
+
+                    log(
+                        "Caller ID: " +
+                        data.callerId
+                    );
+
+                    log(
+                        "Call type: " +
+                        data.callType
+                    );
+
+                    log(
+                        "Call ID: " +
+                        data.callId
+                    );
+
+                    currentCallId =
+                        data.callId;
+
+                    currentCallType =
+                        data.callType;
+
+                    currentCallerId =
+                        data.callerId;
+
+                    currentReceiverId =
+                        socket.id
+                            ? socket.userId
+                            : null;
+
+                    pendingOffer =
+                        data.offer;
+
+                    incomingCall.style.display =
+                        "block";
+
+                    endBtn.disabled = false;
+
+                    log(
+                        "Waiting for receiver to Accept or Reject..."
+                    );
+                }
+            );
+
+            // =================================================
+            // CALL ACCEPTED
+            // =================================================
+
+            socket.on(
+                "callAccepted",
+                async (data) => {
+                    try {
+                        log("===============================");
+                        log(
+                            "✅ CALL ACCEPTED."
+                        );
+
+                        log(
+                            "Call ID: " +
+                            data.callId
+                        );
+
+                        currentCallId =
+                            data.callId;
+
+                        currentReceiverId =
+                            data.receiverId;
+
+                        if (!peerConnection) {
+                            log(
+                                "❌ Peer connection does not exist."
+                            );
+                            return;
+                        }
+
+                        const answer =
+                            new RTCSessionDescription(
+                                data.answer
+                            );
+
+                        await peerConnection
+                            .setRemoteDescription(
+                                answer
+                            );
+
+                        log(
+                            "✅ Remote answer applied."
+                        );
+
+                        await processPendingIceCandidates();
+
+                        endBtn.disabled = false;
+
+                        log(
+                            "🎉 WebRTC negotiation completed."
+                        );
+                    } catch (error) {
+                        console.error(
+                            "callAccepted error:",
+                            error
+                        );
+
+                        log(
+                            "❌ Error processing call acceptance: " +
+                            error.message
+                        );
+                    }
+                }
+            );
+
+            // =================================================
+            // CALL REJECTED
+            // =================================================
+
+            socket.on(
+                "callRejected",
+                (data) => {
+                    log("===============================");
+                    log("❌ CALL REJECTED.");
+
+                    log(
+                        data.message ||
+                        "The user rejected the call."
+                    );
+
+                    cleanupCall();
+                }
+            );
+
+            // =================================================
+            // CALL BUSY
+            // =================================================
+
+            socket.on(
+                "callBusy",
+                (data) => {
+                    log("===============================");
+                    log("📵 USER IS BUSY.");
+
+                    log(
+                        data.message ||
+                        "The user is busy."
+                    );
+
+                    cleanupCall();
+                }
+            );
+
+            // =================================================
+            // WEBRTC OFFER
+            // =================================================
+
+            socket.on(
+                "webrtcOffer",
+                async (data) => {
+                    try {
+                        log(
+                            "📨 WebRTC offer received."
+                        );
+
+                        // This event is supported by the backend.
+                        // The initial call already sends the offer
+                        // through incomingCall.
+                        //
+                        // Therefore, we only process this if
+                        // there is no remote description yet.
+
+                        if (!peerConnection) {
+                            log(
+                                "Creating peer connection for WebRTC offer..."
+                            );
+
+                            currentCallId =
+                                data.callId;
+
+                            currentCallerId =
+                                data.senderId;
+
+                            currentReceiverId =
+                                data.receiverId;
+
+                            peerConnection =
+                                createPeerConnection(
+                                    data.senderId,
+                                    data.callId,
+                                    currentCallType ||
+                                        "video"
+                                );
+                        }
+
+                        if (
+                            peerConnection
+                                .remoteDescription
+                        ) {
+                            return;
+                        }
+
+                        await peerConnection
+                            .setRemoteDescription(
+                                new RTCSessionDescription(
+                                    data.offer
+                                )
+                            );
+
+                        await processPendingIceCandidates();
+
+                        log(
+                            "✅ WebRTC offer applied."
+                        );
+                    } catch (error) {
+                        console.error(
+                            "webrtcOffer error:",
+                            error
+                        );
+
+                        log(
+                            "❌ WebRTC offer error: " +
+                            error.message
+                        );
+                    }
+                }
+            );
+
+            // =================================================
+            // WEBRTC ANSWER
+            // =================================================
+
+            socket.on(
+                "webrtcAnswer",
+                async (data) => {
+                    try {
+                        log(
+                            "📨 WebRTC answer received."
+                        );
+
+                        if (!peerConnection) {
+                            return;
+                        }
+
+                        await peerConnection
+                            .setRemoteDescription(
+                                new RTCSessionDescription(
+                                    data.answer
+                                )
+                            );
+
+                        await processPendingIceCandidates();
+
+                        log(
+                            "✅ WebRTC answer applied."
+                        );
+                    } catch (error) {
+                        console.error(
+                            "webrtcAnswer error:",
+                            error
+                        );
+
+                        log(
+                            "❌ WebRTC answer error: " +
+                            error.message
+                        );
+                    }
+                }
+            );
+
+            // =================================================
+            // ICE CANDIDATE
+            // =================================================
+
+            socket.on(
+                "iceCandidate",
+                async (data) => {
+                    try {
+                        log(
+                            "🧊 ICE candidate received."
+                        );
+
+                        if (
+                            !peerConnection
+                        ) {
+                            pendingIceCandidates.push(
+                                data.candidate
+                            );
+
+                            return;
+                        }
+
+                        if (
+                            !peerConnection
+                                .remoteDescription
+                        ) {
+                            pendingIceCandidates.push(
+                                data.candidate
+                            );
+
+                            return;
+                        }
+
+                        await peerConnection
+                            .addIceCandidate(
+                                new RTCIceCandidate(
+                                    data.candidate
+                                )
+                            );
+
+                        log(
+                            "✅ ICE candidate added."
+                        );
+                    } catch (error) {
+                        console.error(
+                            "ICE candidate error:",
+                            error
+                        );
+
+                        log(
+                            "❌ ICE candidate error: " +
+                            error.message
+                        );
+                    }
+                }
+            );
+
+            // =================================================
+            // CALL ENDED
+            // =================================================
+
+            socket.on(
+                "callEnded",
+                (data) => {
+                    log("===============================");
+                    log("📴 CALL ENDED BY OTHER USER.");
+
+                    log(
+                        "Call ID: " +
+                        data.callId
+                    );
+
+                    cleanupCall();
+                }
+            );
+        }
+    );
+
+    // =====================================================
+    // START AUDIO CALL
+    // =====================================================
+
+    audioCallBtn.addEventListener(
+        "click",
+        async () => {
+            log("===============================");
+            log("🎤 Audio Call button clicked.");
+
+            const receiverId =
+                otherUserIdInput.value.trim();
+
+            if (!receiverId) {
+                log(
+                    "❌ Please enter receiver user ID."
+                );
+
+                return;
+            }
+
+            if (
+                !socket ||
+                !socket.connected
+            ) {
+                log(
+                    "❌ Socket is not connected."
+                );
+
+                return;
+            }
+
+            await startOutgoingCall(
+                "audio",
+                receiverId
+            );
+        }
+    );
+
+    // =====================================================
+    // START VIDEO CALL
+    // =====================================================
+
+    videoCallBtn.addEventListener(
+        "click",
+        async () => {
+            log("===============================");
+            log("📹 Video Call button clicked.");
+
+            const receiverId =
+                otherUserIdInput.value.trim();
+
+            if (!receiverId) {
+                log(
+                    "❌ Please enter receiver user ID."
+                );
+
+                return;
+            }
+
+            if (
+                !socket ||
+                !socket.connected
+            ) {
+                log(
+                    "❌ Socket is not connected."
+                );
+
+                return;
+            }
+
+            await startOutgoingCall(
+                "video",
+                receiverId
+            );
+        }
+    );
+
+    // =====================================================
+    // START OUTGOING CALL
+    // =====================================================
+
+    async function startOutgoingCall(
+        callType,
+        receiverId
+    ) {
+        try {
+            log(
+                "Starting " +
+                callType +
+                " call to: " +
+                receiverId
+            );
+
+            currentCallId =
+                crypto.randomUUID();
+
+            currentCallType =
+                callType;
+
+            currentCallerId = null;
+            currentReceiverId =
+                receiverId;
+
+            log(
+                "Call ID: " +
+                currentCallId
+            );
+
+            // Get microphone/camera
+            const stream =
+                await getLocalMedia(
+                    callType
+                );
+
+            if (!stream) {
+                log(
+                    "❌ Call cancelled because media access failed."
+                );
+
+                return;
+            }
+
+            // Create peer connection
+            createPeerConnection(
+                receiverId,
+                currentCallId,
+                callType
+            );
+
+            // Add local audio/video tracks
+            addLocalTracks();
+
+            // Create WebRTC offer
+            log(
+                "Creating WebRTC offer..."
+            );
+
+            const offer =
+                await peerConnection
+                    .createOffer();
+
+            await peerConnection
+                .setLocalDescription(
+                    offer
+                );
+
+            log(
+                "✅ WebRTC offer created."
+            );
+
+            // Send call to receiver
+            socket.emit(
+                "callUser",
+                {
+                    receiverId,
+                    callId:
+                        currentCallId,
+                    callType,
+                    offer
+                }
+            );
+
+            log(
+                "📞 Incoming call notification sent to receiver."
+            );
+
+            endBtn.disabled = false;
+
+        } catch (error) {
+            console.error(
+                "Outgoing call error:",
+                error
+            );
+
+            log(
+                "❌ Failed to start call: " +
+                error.message
+            );
+
+            cleanupCall();
+        }
+    }
+
+    // =====================================================
+    // ACCEPT CALL
+    // =====================================================
+
+    acceptBtn.addEventListener(
+        "click",
+        async () => {
+            try {
+                log("===============================");
+                log("✅ Accept button clicked.");
+
+                if (
+                    !socket ||
+                    !socket.connected
+                ) {
+                    log(
+                        "❌ Socket is not connected."
+                    );
+
+                    return;
+                }
+
+                if (
+                    !pendingOffer ||
+                    !currentCallerId ||
+                    !currentCallId
+                ) {
+                    log(
+                        "❌ No pending incoming call."
+                    );
+
+                    return;
+                }
+
+                incomingCall.style.display =
+                    "none";
+
+                log(
+                    "Accepting " +
+                    currentCallType +
+                    " call..."
+                );
+
+                // Receiver gets camera/microphone
+                const stream =
+                    await getLocalMedia(
+                        currentCallType
+                    );
+
+                if (!stream) {
+                    log(
+                        "❌ Could not access local media."
+                    );
+
+                    return;
+                }
+
+                // Create peer connection
+                createPeerConnection(
+                    currentCallerId,
+                    currentCallId,
+                    currentCallType
+                );
+
+                // Add local tracks
+                addLocalTracks();
+
+                // Apply caller offer
+                await peerConnection
+                    .setRemoteDescription(
+                        new RTCSessionDescription(
+                            pendingOffer
+                        )
+                    );
+
+                log(
+                    "✅ Caller offer applied."
+                );
+
+                await processPendingIceCandidates();
+
+                // Create answer
+                const answer =
+                    await peerConnection
+                        .createAnswer();
+
+                await peerConnection
+                    .setLocalDescription(
+                        answer
+                    );
+
+                log(
+                    "✅ WebRTC answer created."
+                );
+
+                // Send answer to caller
+                socket.emit(
+                    "callAccepted",
+                    {
+                        callerId:
+                            currentCallerId,
+
+                        callId:
+                            currentCallId,
+
+                        answer
+                    }
+                );
+
+                log(
+                    "📨 Call acceptance sent to caller."
+                );
+
+                pendingOffer = null;
+
+                endBtn.disabled = false;
+
+            } catch (error) {
+                console.error(
+                    "Accept call error:",
+                    error
+                );
+
+                log(
+                    "❌ Failed to accept call: " +
+                    error.message
+                );
+            }
+        }
+    );
+
+    // =====================================================
+    // REJECT CALL
+    // =====================================================
+
+    rejectBtn.addEventListener(
+        "click",
+        () => {
+            log("===============================");
+            log("❌ Reject button clicked.");
+
+            if (
+                socket &&
+                socket.connected &&
+                currentCallerId &&
+                currentCallId
+            ) {
+                socket.emit(
+                    "callRejected",
+                    {
+                        callerId:
+                            currentCallerId,
+
+                        callId:
+                            currentCallId
+                    }
+                );
+
+                log(
+                    "Call rejection sent to caller."
+                );
+            }
+
+            incomingCall.style.display =
+                "none";
+
+            pendingOffer = null;
+
+            cleanupCall();
+        }
+    );
+
+    // =====================================================
+    // END CALL
+    // =====================================================
+
+    endBtn.addEventListener(
+        "click",
+        () => {
+            log("===============================");
+            log("📴 End Call button clicked.");
+
+            if (
+                socket &&
+                socket.connected &&
+                currentReceiverId &&
+                currentCallId
+            ) {
+                socket.emit(
+                    "callEnded",
+                    {
+                        receiverId:
+                            currentReceiverId,
+
+                        callId:
+                            currentCallId
+                    }
+                );
+
+                log(
+                    "Call ended notification sent."
+                );
+            }
+
+            cleanupCall();
+        }
+    );
+
+    // =====================================================
+    // PROCESS PENDING ICE CANDIDATES
+    // =====================================================
+
+    async function processPendingIceCandidates() {
+        if (
+            !peerConnection ||
+            !peerConnection.remoteDescription
+        ) {
+            return;
+        }
+
+        while (
+            pendingIceCandidates.length > 0
+        ) {
+            const candidate =
+                pendingIceCandidates.shift();
+
+            try {
+                await peerConnection
+                    .addIceCandidate(
+                        new RTCIceCandidate(
+                            candidate
+                        )
+                    );
+
+                log(
+                    "✅ Pending ICE candidate added."
+                );
+            } catch (error) {
+                console.error(
+                    "Pending ICE error:",
+                    error
+                );
+            }
+        }
+    }
+
+    // =====================================================
+    // CLEANUP CALL
+    // =====================================================
+
+    function cleanupCall() {
+        log("Cleaning up call...");
+
+        // Stop microphone/camera
+        if (localStream) {
+            localStream
+                .getTracks()
+                .forEach((track) => {
+                    track.stop();
+                });
+
+            localStream = null;
+        }
+
+        // Close peer connection
+        if (peerConnection) {
+            peerConnection.close();
+            peerConnection = null;
+        }
+
+        // Clear videos
+        localVideo.srcObject = null;
+        remoteVideo.srcObject = null;
+
+        // Clear call state
+        currentCallId = null;
+        currentCallType = null;
+        currentCallerId = null;
+        currentReceiverId = null;
+
+        pendingOffer = null;
+
+        pendingIceCandidates.length = 0;
+
+        incomingCall.style.display =
+            "none";
+
+        endBtn.disabled = true;
+
+        log("✅ Call cleaned up.");
+    }
+</script>
+</body>
+</html>

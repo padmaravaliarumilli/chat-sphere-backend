@@ -383,6 +383,7 @@ const initializeSocket = (server) => {
             socket.userId
         );
 
+        
         // =================================================
         // USER JOIN
         // =================================================
@@ -1075,6 +1076,361 @@ const initializeSocket = (server) => {
                 }
             }
         );
+
+                // =====================================================
+        // AUDIO / VIDEO CALLING - WEBRTC SIGNALING
+        // =====================================================
+
+        // START CALL
+        socket.on('callUser', (data) => {
+            try {
+                const {
+                    receiverId,
+                    callId,
+                    callType,
+                    offer
+                } = data;
+
+                const callerId = socket.userId;
+
+                if (!callerId || !receiverId || !callId || !callType) {
+                    return;
+                }
+
+                // Only allow audio or video calls
+                if (!['audio', 'video'].includes(callType)) {
+                    return;
+                }
+
+                const receiverSocket =
+                    onlineUsers.get(receiverId.toString());
+
+                // Receiver is offline
+                if (!receiverSocket) {
+                    socket.emit('callUnavailable', {
+                        callId,
+                        receiverId,
+                        message: 'User is offline'
+                    });
+
+                    return;
+                }
+
+                // Send incoming call to receiver
+                io.to(receiverSocket).emit('incomingCall', {
+                    callId,
+                    callerId,
+                    receiverId: receiverId.toString(),
+                    callType,
+                    offer
+                });
+
+                console.log(
+                    `${callType} call started: ${callerId} -> ${receiverId}`
+                );
+
+            } catch (error) {
+                console.error(
+                    'Call user error:',
+                    error.message
+                );
+            }
+        });
+
+
+        // =====================================================
+        // CALL ACCEPTED
+        // =====================================================
+
+        socket.on('callAccepted', (data) => {
+            try {
+                const {
+                    callerId,
+                    callId,
+                    answer
+                } = data;
+
+                const receiverId = socket.userId;
+
+                if (!callerId || !callId || !answer) {
+                    return;
+                }
+
+                const callerSocket =
+                    onlineUsers.get(callerId.toString());
+
+                if (!callerSocket) {
+                    return;
+                }
+
+                io.to(callerSocket).emit('callAccepted', {
+                    callId,
+                    callerId: callerId.toString(),
+                    receiverId,
+                    answer
+                });
+
+                console.log(
+                    `Call accepted: ${receiverId} -> ${callerId}`
+                );
+
+            } catch (error) {
+                console.error(
+                    'Call accepted error:',
+                    error.message
+                );
+            }
+        });
+
+
+        // =====================================================
+        // CALL REJECTED
+        // =====================================================
+
+        socket.on('callRejected', (data) => {
+            try {
+                const {
+                    callerId,
+                    callId
+                } = data;
+
+                const receiverId = socket.userId;
+
+                if (!callerId || !callId) {
+                    return;
+                }
+
+                const callerSocket =
+                    onlineUsers.get(callerId.toString());
+
+                if (!callerSocket) {
+                    return;
+                }
+
+                io.to(callerSocket).emit('callRejected', {
+                    callId,
+                    callerId: callerId.toString(),
+                    receiverId,
+                    message: 'Call rejected'
+                });
+
+                console.log(
+                    `Call rejected: ${receiverId} -> ${callerId}`
+                );
+
+            } catch (error) {
+                console.error(
+                    'Call rejected error:',
+                    error.message
+                );
+            }
+        });
+
+
+        // =====================================================
+        // WEBRTC OFFER
+        // =====================================================
+
+        socket.on('webrtcOffer', (data) => {
+            try {
+                const {
+                    receiverId,
+                    callId,
+                    offer
+                } = data;
+
+                const senderId = socket.userId;
+
+                if (!receiverId || !callId || !offer) {
+                    return;
+                }
+
+                const receiverSocket =
+                    onlineUsers.get(receiverId.toString());
+
+                if (!receiverSocket) {
+                    return;
+                }
+
+                io.to(receiverSocket).emit('webrtcOffer', {
+                    callId,
+                    senderId,
+                    receiverId: receiverId.toString(),
+                    offer
+                });
+
+            } catch (error) {
+                console.error(
+                    'WebRTC offer error:',
+                    error.message
+                );
+            }
+        });
+
+
+        // =====================================================
+        // WEBRTC ANSWER
+        // =====================================================
+
+        socket.on('webrtcAnswer', (data) => {
+            try {
+                const {
+                    receiverId,
+                    callId,
+                    answer
+                } = data;
+
+                const senderId = socket.userId;
+
+                if (!receiverId || !callId || !answer) {
+                    return;
+                }
+
+                const receiverSocket =
+                    onlineUsers.get(receiverId.toString());
+
+                if (!receiverSocket) {
+                    return;
+                }
+
+                io.to(receiverSocket).emit('webrtcAnswer', {
+                    callId,
+                    senderId,
+                    receiverId: receiverId.toString(),
+                    answer
+                });
+
+            } catch (error) {
+                console.error(
+                    'WebRTC answer error:',
+                    error.message
+                );
+            }
+        });
+
+
+        // =====================================================
+        // ICE CANDIDATE
+        // =====================================================
+
+        socket.on('iceCandidate', (data) => {
+            try {
+                const {
+                    receiverId,
+                    callId,
+                    candidate
+                } = data;
+
+                const senderId = socket.userId;
+
+                if (!receiverId || !callId || !candidate) {
+                    return;
+                }
+
+                const receiverSocket =
+                    onlineUsers.get(receiverId.toString());
+
+                if (!receiverSocket) {
+                    return;
+                }
+
+                io.to(receiverSocket).emit('iceCandidate', {
+                    callId,
+                    senderId,
+                    receiverId: receiverId.toString(),
+                    candidate
+                });
+
+            } catch (error) {
+                console.error(
+                    'ICE candidate error:',
+                    error.message
+                );
+            }
+        });
+
+
+        // =====================================================
+        // END CALL
+        // =====================================================
+
+        socket.on('callEnded', (data) => {
+            try {
+                const {
+                    receiverId,
+                    callId
+                } = data;
+
+                const callerId = socket.userId;
+
+                if (!receiverId || !callId) {
+                    return;
+                }
+
+                const receiverSocket =
+                    onlineUsers.get(receiverId.toString());
+
+                if (!receiverSocket) {
+                    return;
+                }
+
+                io.to(receiverSocket).emit('callEnded', {
+                    callId,
+                    callerId,
+                    receiverId: receiverId.toString()
+                });
+
+                console.log(
+                    `Call ended: ${callerId} -> ${receiverId}`
+                );
+
+            } catch (error) {
+                console.error(
+                    'Call ended error:',
+                    error.message
+                );
+            }
+        });
+
+
+        // =====================================================
+        // CALL BUSY
+        // =====================================================
+
+        socket.on('callBusy', (data) => {
+            try {
+                const {
+                    callerId,
+                    callId
+                } = data;
+
+                const receiverId = socket.userId;
+
+                if (!callerId || !callId) {
+                    return;
+                }
+
+                const callerSocket =
+                    onlineUsers.get(callerId.toString());
+
+                if (!callerSocket) {
+                    return;
+                }
+
+                io.to(callerSocket).emit('callBusy', {
+                    callId,
+                    callerId: callerId.toString(),
+                    receiverId,
+                    message: 'User is busy'
+                });
+
+            } catch (error) {
+                console.error(
+                    'Call busy error:',
+                    error.message
+                );
+            }
+        });
 
         // =================================================
         // DISCONNECT
